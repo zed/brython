@@ -876,10 +876,9 @@ function $AttrCtx(context){
                             parent.context.tree[0].args===undefined){
                         // set attr to instance of a class without a parent
                         this.assign_self = true
-                        return [js+".__class__ && !"+
-                            js+".__class__.$has_setattr && "+
-                            js+'.__class__ !== $B.$factory ? '+ js+"."+
-                            this.name+" = ", " : $B.$setattr("+js+', "'+
+                        return [js+".__class__.__setattr__==="+
+                            "undefined && "+js+'.__class__ !== $B.$factory ? '+
+                            js+"."+this.name+" = ", " : $B.$setattr("+js+', "'+
                             this.name+'", ']
                     }
                 }
@@ -3005,25 +3004,23 @@ function $FromCtx(context){
             indent = $get_node(this).indent,
             head= ' '.repeat(indent);
 
-        module.imports[this.module] = true
-
         var _mod = this.module.replace(/\$/g,''), $package, packages=[]
         while(_mod.length>0){
             if(_mod.charAt(0)=='.'){
                 if($package===undefined){
                     if($B.imported[mod]!==undefined){
                         $package = $B.imported[mod].__package__
-                        packages = $package.split('.')
                     }
                 }else{
                     $package = $B.imported[$package]
-                    packages.pop()
                 }
                 if($package===undefined){
                     return 'throw SystemError("Parent module \'\' not loaded,'+
                         ' cannot perform relative import")'
                 }else if($package=='None'){
                     console.log('package is None !')
+                }else{
+                    packages.push($package)
                 }
                 _mod = _mod.substr(1)
             }else{
@@ -3032,6 +3029,7 @@ function $FromCtx(context){
         }
         if(_mod){packages.push(_mod)}
         this.module = packages.join('.')
+        module.imports[this.module] = true
 
         // FIXME : Replacement still needed ?
         var mod_name = this.module.replace(/\$/g,'')
@@ -5291,6 +5289,7 @@ function $add_line_num(node,rank){
     }
 }
 
+
 $B.$add_line_num = $add_line_num
 
 function $bind(name, scope_id, level){
@@ -5583,7 +5582,6 @@ function $transition(context,token){
         switch(token) {
           case ',':
             if(context.expect=='id'){$_SyntaxError(context, token)}
-            context.expect = 'id'
             return context
           case 'id':
           case 'imaginary':
@@ -7699,7 +7697,6 @@ $B.py2js = function(src, module, locals_id, parent_block_id, line_info){
     // create_ns = boolean to create a namespace for locals_id (used in exec)
     //
     // Returns a tree structure representing the Python source code
-
     var t0 = new Date().getTime(),
         is_comp = false
 
@@ -7802,9 +7799,7 @@ $B.py2js = function(src, module, locals_id, parent_block_id, line_info){
     root.add(catch_node)
 
     if($B.profile>0){$add_profile(root,null,module)}
-    if($B.debug>0){
-        $add_line_num(root,null,module)
-    }
+    if($B.debug>0){$add_line_num(root,null,module)}
 
     var t1 = new Date().getTime()
     if($B.debug>=2){
@@ -7907,11 +7902,26 @@ function run_script(script){
         // Conversion of Python source code to Javascript
 
         root = $B.py2js(script.src,script.name,script.name,'__builtins__')
-        js = root.to_js()
-        //console.log('imports in', script.name, root.imports)
-        if($B.debug>1){console.log(js)}
+        var js1 = root.to_js()
+        if($B.debug>1){console.log(js1)}
+        console.log('imports for', script.name, Object.keys(root.imports))
+        var imports = root.imports
+        for(var key in imports){
+            if($B.imported.hasOwnProperty(key)){
+                delete imports[key]
+            }
+        }
+        var idb_cx = indexedDB.open("brython_stdlib")
+        idb_cx.onsuccess = function(){
+            $B.load_imports_idb(script.name, idb_cx, imports, js1)
+            console.log('terminé dans run script')
+        }
+        idb_cx.onupgradeneeded = function(){
+            console.log('upgradeneeded')
+            eval(js)
+        }
         // Run resulting Javascript
-        eval(js)
+        //eval(js1)
         //$B.imported[script.name] = $locals
     }catch($err){
         if($B.debug>1){
@@ -7951,7 +7961,7 @@ function run_script(script){
     }finally{
         root = null
         js = null
-        $B.clear_ns(script.name)
+        //$B.clear_ns(script.name)
     }
 }
 
@@ -8285,3 +8295,4 @@ $B.brython = brython
 
 })(__BRYTHON__)
 var brython = __BRYTHON__.brython
+
