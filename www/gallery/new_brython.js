@@ -1,36 +1,36 @@
 function run($B){
+
 __BRYTHON__.debug = 1
 
-function ajax_load(){
-    if(this.readyState==4){
-        if(this.status==200){
-            __BRYTHON__.module_source[this.module] = this.responseText.length
-            if(this.path != "libs"){
-                var root = __BRYTHON__.py2js(this.responseText, this.module,
-                    this.module, "__builtins__")
-                __BRYTHON__.module_source[this.module] = root.to_js()
-                for(var key in root.imports){
-                    if(!__BRYTHON__.module_source.hasOwnProperty(key)){
-                        tasks.splice(0, 0, [inImported, key])
-                    }
-                }
-            }
-        }else if(this.status==404){
-            var path_num = this.path_num
-            if(this.path_num < $B.path.length-1){
-                tasks.splice(0, 0, [ajax_search, [this.module, this.path_num + 1]])
-            }
-        }
-        loop()
-    }
-}
 
-function ajax_search(args){
-    var module = args[0],
-        path_num = args[1]
+
+function ajax_search(module, path_num){
     var req = new XMLHttpRequest()
     req.open("GET", __BRYTHON__.path[path_num] + "/" + module + ".py", true)
-    req.onreadystatechange = ajax_load
+    req.onreadystatechange = function (){
+        if(this.readyState==4){
+            if(this.status==200){
+                __BRYTHON__.module_source[this.module] = this.responseText.length
+                if(this.path != "libs"){
+                    var root = __BRYTHON__.py2js(this.responseText, this.module,
+                        this.module, "__builtins__")
+                    __BRYTHON__.module_source[this.module] = root.to_js()
+                    for(var key in root.imports){
+                        if(!__BRYTHON__.module_source.hasOwnProperty(key)){
+                            tasks.splice(0, 0, [inImported, key])
+                        }
+                    }
+                }
+            }else if(this.status==404){
+                var path_num = this.path_num
+                if(this.path_num < $B.path.length-1){
+                    tasks.splice(0, 0,
+                        [ajax_search, this.module, this.path_num + 1])
+                }
+            }
+            loop()
+        }
+    }
     req.module = module
     req.path_num = path_num
     req.send()
@@ -68,9 +68,9 @@ function inImported(module){
     if(__BRYTHON__.imported.hasOwnProperty(module)){
         __BRYTHON__.module_source[module] = "in imported"
     }else if(__BRYTHON__.stdlib.hasOwnProperty(module)){
-        tasks.splice(0, 0, [idb_search, module])
+        tasks.splice(0, 0, [idb_get, module])
     }else{
-        tasks.splice(0, 0, [ajax_search, [module, 0]])
+        tasks.splice(0, 0, [ajax_search, module, 0])
     }
     loop()
 }
@@ -90,12 +90,13 @@ function idb_load(evt, module){
                 source = elts[1],
                 is_package = elts.length==3
             if(ext==".py"){
-                var root = __BRYTHON__.py2js(source, module, module, "__builtins__"),
+                var root = __BRYTHON__.py2js(source, module, module,
+                        "__builtins__"),
                     js = root.to_js(),
                     imports = root.imports
                 imports = Object.keys(imports).join(",")
                 tasks.splice(0, 0, [store_precompiled,
-                    [module, js, imports, is_package]])
+                    module, js, imports, is_package])
             }else{
                 source += "\nvar $locals_" +
                     module.replace(/\./g, "_") + " = $module"
@@ -111,9 +112,6 @@ function idb_load(evt, module){
             var subimports = res.imports.split(",")
             for(var i=0;i<subimports.length;i++){
                 var subimport = subimports[i]
-                if(subimport==""){
-                    console.log('bizarre', module)
-                }
                 if(subimport.startsWith(".")){
                     var url_elts = module.split("."),
                         nb_dots = 0
@@ -129,7 +127,7 @@ function idb_load(evt, module){
                 }
                 if(!__BRYTHON__.imported.hasOwnProperty(subimport) &&
                         !__BRYTHON__.module_source.hasOwnProperty(subimport)){
-                    tasks.splice(0, 0, [idb_search, subimport])
+                    tasks.splice(0, 0, [idb_get, subimport])
                 }
             }
         }
@@ -137,22 +135,8 @@ function idb_load(evt, module){
     loop()
 }
 
-function stored(evt, module){
-    // Called when the precompiled Javascript for module has been stored
-    // in the indexedDB database.
-    // We add the task "idb_search", knowing that this time it will use the
-    // compiled version.
-    tasks.splice(0, 0, [idb_search, module])
-    loop()
-}
-
-function store_precompiled(args, callback){
+function store_precompiled(module, js, imports, is_package){
     // Sends a request to store the compiled Javascript for a module.
-    var module = args[0],
-        js = args[1],
-        imports = args[2],
-        is_package = args[3]
-
     var db = idb_cx.result,
         tx = db.transaction("modules", "readwrite"),
         store = tx.objectStore("modules"),
@@ -162,10 +146,15 @@ function store_precompiled(args, callback){
             "timestamp": __BRYTHON__.timestamp,
             "is_package": is_package},
         request = store.put(data)
-    request.onsuccess = function(evt){return stored(evt, module)}
+    request.onsuccess = function(evt){
+        // Restart the task "idb_search", knowing that this time it will use
+        // the compiled version.
+        tasks.splice(0, 0, [idb_get, module])
+        loop()
+    }
 }
 
-function idb_get(module, callback){
+function idb_get(module){
     // Sends a request to the indexedDB database for the module name.
     var db = idb_cx.result,
         tx = db.transaction("modules", "readonly")
@@ -179,29 +168,19 @@ function idb_get(module, callback){
     }
 }
 
-function idb_search(module, callback){
-    tasks.splice(0, 0, [idb_get, module])
-    loop()
-}
-
 function create_db(evt){
     // The database did not previously exist, create object store.
     var db = idb_cx.result,
         store = db.createObjectStore("modules", {"keyPath": "name"})
-    store.onsuccess = function(){
-        loop()
-    }
+    store.onsuccess = loop
     store.onerror = function(){
-        //document.write('erreur !')
         console.log('erreur')
     }
 }
 
-function idb_open(obj, callback){
-    console.log('idb open')
+function idb_open(obj){
     idb_cx = indexedDB.open("brython_stdlib")
     idb_cx.onsuccess = function(){
-        console.log('success')
         var db = idb_cx.result
         if(!db.objectStoreNames.contains("modules")){
             var version = db.version
@@ -221,9 +200,7 @@ function idb_open(obj, callback){
                 console.log("db opened", idb_cx)
                 var db = idb_cx.result,
                     store = db.createObjectStore("modules", {"keyPath": "name"})
-                store.onsuccess = function(){
-                    loop()
-                }
+                store.onsuccess = loop
             }
         }else{
             console.log("object store exists")
@@ -250,14 +227,13 @@ var tasks = [],
 // Build the list of tasks to run.
 // A task is a list of items:
 // - item[0] is a function, or the string "execute"
-// - if it is a function, it is executed with the arguments in item[1] and
-//   optionally item[2]. The function may add a new task at the beginning of
-//   the tasks list.
+// - if it is a function, it is executed with the next items as arguments.
+//   The function may add a new task at the beginning of the tasks list.
 // - if it is the string "execute", item[1] is the Javascript code to execute
 
 // Start with the task that opens the database, or create it if it doesn't
 // exists.
-tasks.push([idb_open, null, function(){console.log("upgrade needed")}])
+tasks.push([idb_open])
 
 for(var i=0; i<scripts.length; i++){
     var script_id = scripts[i].getAttribute("id")
@@ -276,7 +252,8 @@ for(var i=0; i<scripts.length; i++){
             [scripts[i].getAttribute("src"), script_id]])
     }else{
         var src = scripts[i].textContent,
-            root = __BRYTHON__.py2js(src, "__main__" + i, "__main__" + i, "__builtins__"),
+            root = __BRYTHON__.py2js(src, script_id, script_id,
+                "__builtins__"),
             js = root.to_js(),
             imports = Object.keys(root.imports)
 
@@ -296,11 +273,10 @@ function loop(){
         return
     }
     var task = tasks.shift()
-    var func = task[0],
-        arg = task[1]
+    var func = task[0]
     if(func == "execute"){
         try{
-            eval(arg)
+            eval(task[1])
         }catch(err){
             if($B.debug>1){
                 console.log(err)
@@ -340,7 +316,7 @@ function loop(){
         }
         loop()
     }else{
-        func(arg)
+        func.apply(null, task.slice(1))
     }
 }
 
