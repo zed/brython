@@ -215,6 +215,7 @@ function import_py(module,path,$package){
 
 //$B.run_py is needed for import hooks..
 function run_py(module_contents,path,module,compiled) {
+    console.log('run py, module', module.__name__, 'compiled', compiled)
     var root, js
     if (!compiled) {
         var $Node = $B.$Node,$NodeJSCtx=$B.$NodeJSCtx
@@ -245,12 +246,23 @@ function run_py(module_contents,path,module,compiled) {
 
     try{
         js = (compiled)? module_contents : root.to_js()
-        //console.log('imports in', module.__name__, root.imports)
+
+        var imports = root.imports
+        console.log('imports', imports)
+        var idb_cx = indexedDB.open("brython_stdlib")
+        idb_cx.onsuccess = function(){
+            $B.load_imports_idb(module.__name__, idb_cx, imports, js)
+        }
+        idb_cx.onupgradeneeded = function(){
+            console.log('upgradeneeded')
+            eval(js)
+        }
+
         if ($B.$options.debug == 10) {
            console.log('code for module '+module.__name__)
            console.log(js)
         }
-        eval(js)
+        //eval(js)
     }catch(err){
         console.log(err+' for module '+module.__name__)
         console.log(err)
@@ -268,9 +280,9 @@ function run_py(module_contents,path,module,compiled) {
     }finally{
         root = null
         js = null
-        $B.clear_ns(module.__name__)
+        //$B.clear_ns(module.__name__)
     }
-
+    /*
     try{
         // Create module object
         var mod = eval('$module')
@@ -291,6 +303,7 @@ function run_py(module_contents,path,module,compiled) {
         if($B.debug>0){console.log('line info '+__BRYTHON__.line_info)}
         throw err
     }
+    */
 }
 
 $B.run_py = run_py
@@ -777,6 +790,22 @@ $B.$__import__ = function (mod_name, globals, locals, fromlist, level){
    }
 
    if (modobj === undefined) {
+       if($B.module_source.hasOwnProperty(mod_name)){
+           var mod_js = $B.module_source[mod_name]
+           eval(mod_js)
+           try{
+               var $module = eval("$locals_" +
+                   mod_name.replace(/\./g, "_"))
+           }catch(err){
+               console.log(mod_js)
+               throw err
+           }
+           if($module===undefined){console.log('undef for', mod_name)}
+           $module.__class__ = $B.$ModuleDict
+           $module.__name__ = mod_name
+           $B.imported[mod_name] = $module
+           return $module
+       }
        // [Import spec] Argument defaults and preconditions
        // get name of module this was called in
        if ($B.is_none(fromlist)) {
