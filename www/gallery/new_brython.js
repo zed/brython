@@ -49,12 +49,19 @@ function ajax_load_script(url, script_id){
                 }
                 tasks.splice(0, 0, ["execute", js])
             }else if(this.status==404){
-                throw Error(this.url+" not found")
+                throw Error(url+" not found")
             }
             loop()
         }
     }
     req.send()
+}
+
+function add_jsmodule(module, source){
+    // Use built-in Javascript module
+    source += "\nvar $locals_" +
+        module.replace(/\./g, "_") + " = $module"
+    $B.module_source[module] = source
 }
 
 function inImported(module){
@@ -69,10 +76,7 @@ function inImported(module){
         if(ext==".py"){
             tasks.splice(0, 0, [idb_get, module])
         }else{
-            // Use built-in Javascript module
-            source += "\nvar $locals_" +
-                module.replace(/\./g, "_") + " = $module"
-            __BRYTHON__.module_source[module] = source
+            add_jsmodule(module, source)
         }
     }else{
         tasks.splice(0, 0, [ajax_search, module, 0])
@@ -136,12 +140,22 @@ function idb_load(evt, module){
                     }
                     subimport = elts.join(".")
                 }
-                if(!__BRYTHON__.imported.hasOwnProperty(subimport) &&
-                        !__BRYTHON__.module_source.hasOwnProperty(subimport)){
+                if(!$B.imported.hasOwnProperty(subimport) &&
+                        !$B.module_source.hasOwnProperty(subimport)){
                     // If the code of the required module is not already
                     // loaded, add a task for this.
-                    //console.log('subimport', subimport)
-                    tasks.splice(0, 0, [inImported, subimport])
+                    if($B.VFS.hasOwnProperty(subimport)){
+                        var submodule = $B.VFS[subimport],
+                            ext = submodule[0],
+                            source = submodule[1]
+                        if(submodule[0] == ".py"){
+                            tasks.splice(0, 0, [idb_get, subimport])
+                        }else{
+                            add_jsmodule(subimport, source)
+                        }
+                    }else{
+                        console.log(subimport, 'not in stdlib')
+                    }
                 }
             }
         }
