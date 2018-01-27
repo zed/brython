@@ -691,6 +691,8 @@ function getattr(obj,attr,_default){
 $B.$getattr = function(obj, attr, _default){
     // Used internally to avoid having to parse the arguments
 
+    if(obj===undefined){console.log('getattr', obj, attr)}
+
     var rawname = attr
     if($B.aliased_names[attr]){attr = '$$'+attr}
 

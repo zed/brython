@@ -247,22 +247,7 @@ function run_py(module_contents,path,module,compiled) {
     try{
         js = (compiled)? module_contents : root.to_js()
 
-        var imports = root.imports
-        console.log('imports', imports)
-        var idb_cx = indexedDB.open("brython_stdlib")
-        idb_cx.onsuccess = function(){
-            $B.load_imports_idb(module.__name__, idb_cx, imports, js)
-        }
-        idb_cx.onupgradeneeded = function(){
-            console.log('upgradeneeded')
-            eval(js)
-        }
-
-        if ($B.$options.debug == 10) {
-           console.log('code for module '+module.__name__)
-           console.log(js)
-        }
-        //eval(js)
+        eval(js)
     }catch(err){
         console.log(err+' for module '+module.__name__)
         console.log(err)
@@ -792,7 +777,15 @@ $B.$__import__ = function (mod_name, globals, locals, fromlist, level){
    if (modobj === undefined) {
        if($B.module_source.hasOwnProperty(mod_name)){
            var mod_js = $B.module_source[mod_name]
-           eval(mod_js)
+           try{
+               eval(mod_js)
+           }catch(err){
+               console.log(mod_js)
+               console.log(err)
+               for(var k in err){console.log(k, err[k])}
+               console.log(Object.keys($B.imported))
+               throw err
+           }
            try{
                var $module = eval("$locals_" +
                    mod_name.replace(/\./g, "_"))
@@ -804,6 +797,12 @@ $B.$__import__ = function (mod_name, globals, locals, fromlist, level){
            $module.__class__ = $B.$ModuleDict
            $module.__name__ = mod_name
            $B.imported[mod_name] = $module
+           var elts = mod_name.split(".")
+           if(elts.length>1){
+               var last_name = elts.pop()
+               if(mod_name=="collections.abc"){console.log("--ok")}
+               $B.builtins.setattr($B.imported[elts.join(".")], last_name, $module)
+           }
            return $module
        }
        // [Import spec] Argument defaults and preconditions

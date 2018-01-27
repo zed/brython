@@ -62,6 +62,8 @@ a.sort_link{
 <script type="text/javascript" src="../src/py_import_hooks.js"></script>
 <script type="text/javascript" src="../src/async.js"></script>
 
+<script type="text/javascript" src="../src/loaders.js"></script>
+
 <script type="text/javascript" src="/src/brython_stdlib.js"></script>
 
 <style>
@@ -79,7 +81,7 @@ a.sort_link{
 <body onLoad="brython(1)">
 <div id="banner_row"></div>
 
-<script type="text/pythonXXX">
+<script type="text/python">
 from browser import document
 
 import datetime
@@ -94,10 +96,7 @@ print(import_test.valude)
 
 </script>
 
-<script type="text/pythonXXX" src="external.py"></script>
-<script src="new_brython.js">
-</script>
-
+<script type="text/python" src="external.py"></script>
 
 </body>
 </html>
