@@ -776,32 +776,41 @@ $B.$__import__ = function (mod_name, globals, locals, fromlist, level){
 
    if (modobj === undefined) {
        if($B.module_source.hasOwnProperty(mod_name)){
-           var mod_js = $B.module_source[mod_name]
-           try{
-               eval(mod_js)
-           }catch(err){
-               console.log(mod_js)
-               console.log(err)
-               for(var k in err){console.log(k, err[k])}
-               console.log(Object.keys($B.imported))
-               throw err
-           }
-           try{
-               var $module = eval("$locals_" +
-                   mod_name.replace(/\./g, "_"))
-           }catch(err){
-               console.log(mod_js)
-               throw err
-           }
-           if($module===undefined){console.log('undef for', mod_name)}
-           $module.__class__ = $B.$ModuleDict
-           $module.__name__ = mod_name
-           $B.imported[mod_name] = $module
-           var elts = mod_name.split(".")
-           if(elts.length>1){
-               var last_name = elts.pop()
-               if(mod_name=="collections.abc"){console.log("--ok")}
-               $B.builtins.setattr($B.imported[elts.join(".")], last_name, $module)
+           var parts = mod_name.split(".")
+           for(var i=0; i<parts.length;i++){
+               var parent = parts.slice(0, i+1).join(".")
+               if($B.imported.hasOwnProperty(parent)){
+                   console.log(parent, 'already in imported')
+                   continue
+               }
+               $B.imported[parent] = module(parent)
+               var mod_js = $B.module_source[parent]
+               //console.log('mod_name', mod_name, "parts", parts, "parent", parent)
+               try{
+                   eval(mod_js)
+               }catch(err){
+                   console.log(mod_js)
+                   console.log(err)
+                   for(var k in err){console.log(k, err[k])}
+                   console.log(Object.keys($B.imported))
+                   throw err
+               }
+               try{
+                   var $module = eval("$locals_" +
+                       parent.replace(/\./g, "_"))
+               }catch(err){
+                   console.log(mod_js)
+                   throw err
+               }
+               $module.__class__ = $B.$ModuleDict
+               $module.__name__ = parent
+               $B.imported[parent] = $module
+               if(i>0){
+                   // Set attribute of parent module
+                   $B.builtins.setattr($B.imported[parts.slice(0, i).join(".")],
+                       parts[i], $module)
+               }
+
            }
            return $module
        }
