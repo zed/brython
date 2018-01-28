@@ -783,13 +783,16 @@ $B.$__import__ = function (mod_name, globals, locals, fromlist, level){
                    console.log(parent, 'already in imported')
                    continue
                }
-               $B.imported[parent] = module(parent)
-               var mod_js = $B.module_source[parent]
+               // Initialise $B.imported[parent]
+               var mod_js = $B.module_source[parent],
+                   is_package = Array.isArray(mod_js)
+               if(is_package){mod_js=mod_js[0];console.log('package', parent)}
+               $B.imported[parent] = module(parent, undefined, is_package)
                //console.log('mod_name', mod_name, "parts", parts, "parent", parent)
                try{
                    eval(mod_js)
                }catch(err){
-                   console.log(mod_js)
+                   //console.log(mod_js)
                    console.log(err)
                    for(var k in err){console.log(k, err[k])}
                    console.log(Object.keys($B.imported))
@@ -907,7 +910,7 @@ $B.$import = function(mod_name, fromlist, aliases, locals){
             // Move up in package hierarchy
             elt = norm_parts.pop();
             if (elt === undefined) {
-                throw _b_.ImportError("Parent module '' not loaded, "+
+                throw _b_.ImportError("Parent module XXX '' not loaded, "+
                     "cannot perform relative import");
             }
         }

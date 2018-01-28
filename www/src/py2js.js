@@ -3005,8 +3005,22 @@ function $FromCtx(context){
             head= ' '.repeat(indent);
 
         var _mod = this.module.replace(/\$/g,''), $package, packages=[]
-        while(_mod.length>0){
+        var parent_module_elts = mod.split(".")
+        var nb_dots = 0
+        while(_mod.length>0 && _mod.charAt(0)=="."){
+            nb_dots++
+            _mod=_mod.substr(1)
+        }
+        if(nb_dots>0){
+            console.log("import", this.module, 'dots', nb_dots, "parent module", parent_module_elts)
+            packages = parent_module_elts.slice(0, parent_module_elts.length - nb_dots + 1)
+        }
+        if(_mod){
+            packages.push(_mod)
+        }
+        /*
             if(_mod.charAt(0)=='.'){
+                console.log("_mod", _mod)
                 if($package===undefined){
                     if($B.imported[mod]!==undefined){
                         $package = $B.imported[mod].__package__
@@ -3015,8 +3029,9 @@ function $FromCtx(context){
                     $package = $B.imported[$package]
                 }
                 if($package===undefined){
-                    return 'throw SystemError("Parent module \'\' not loaded,'+
-                        ' cannot perform relative import")'
+                    console.log("no package for", _mod, mod, $B.module_source[mod]!==undefined)
+                    //return 'throw SystemError("Parent module YYY \'\' not loaded,'+
+                    //    ' cannot perform relative import")'
                 }else if($package=='None'){
                     console.log('package is None !')
                 }else{
@@ -3028,6 +3043,8 @@ function $FromCtx(context){
             }
         }
         if(_mod){packages.push(_mod)}
+        */
+
         this.module = packages.join('.')
         module.imports[this.module] = true
 

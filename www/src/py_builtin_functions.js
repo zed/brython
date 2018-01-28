@@ -547,48 +547,59 @@ function $eval(src, _globals, _locals){
         }
 
         js = root.to_js()
-        var res = eval(js)
 
-        gns = eval('$locals_'+globals_id)
-        if($B.frames_stack[$B.frames_stack.length-1][2] == globals_id){
-            gns = $B.frames_stack[$B.frames_stack.length-1][3]
+        $B.tasks.push([$B.idb_open])
+        var imports = Object.keys(root.imports)
+        for(var j=0; j<imports.length;j++){
+           $B.tasks.push([$B.inImported, imports[j]])
         }
+        $B.tasks.push(["execute", js, [globals_id, eval("$locals_"+globals_id)]])
 
-        // Update _locals with the namespace after execution
-        if(_locals!==undefined){
-            lns = eval('$locals_'+locals_id)
-            for(var attr in lns){
-                attr1 = from_alias(attr)
-                if(attr1.charAt(0)!='$'){
-                    if(_locals.$jsobj){_locals.$jsobj[attr] = lns[attr]}
-                    else{_locals.$string_dict[attr1] = lns[attr]}
+        function update_ns(){
+            gns = eval('$locals_'+globals_id)
+            if($B.frames_stack[$B.frames_stack.length-1][2] == globals_id){
+                gns = $B.frames_stack[$B.frames_stack.length-1][3]
+            }
+
+            // Update _locals with the namespace after execution
+            if(_locals!==undefined){
+                lns = eval('$locals_'+locals_id)
+                for(var attr in lns){
+                    attr1 = from_alias(attr)
+                    if(attr1.charAt(0)!='$'){
+                        if(_locals.$jsobj){_locals.$jsobj[attr] = lns[attr]}
+                        else{_locals.$string_dict[attr1] = lns[attr]}
+                    }
+                }
+            }else{
+                for(var attr in lns){
+                    current_frame[1][attr] = lns[attr]
                 }
             }
-        }else{
-            for(var attr in lns){
-                current_frame[1][attr] = lns[attr]
-            }
-        }
 
-        if(_globals!==undefined){
-            // Update _globals with the namespace after execution
-            for(var attr in gns){
-                attr1 = from_alias(attr)
-                if(attr1.charAt(0)!='$'){
-                    if(_globals.$jsobj){_globals.$jsobj[attr] = gns[attr]}
-                    else{_globals.$string_dict[attr1] = gns[attr]}
+            if(_globals!==undefined){
+                // Update _globals with the namespace after execution
+                for(var attr in gns){
+                    attr1 = from_alias(attr)
+                    if(attr1.charAt(0)!='$'){
+                        if(_globals.$jsobj){_globals.$jsobj[attr] = gns[attr]}
+                        else{_globals.$string_dict[attr1] = gns[attr]}
+                    }
+                }
+            }else{
+                for(var attr in gns){
+                    current_frame[3][attr] = gns[attr]
                 }
             }
-        }else{
-            for(var attr in gns){
-                current_frame[3][attr] = gns[attr]
-            }
+
+            // fixme: some extra variables are bleeding into locals...
+            /*  This also causes issues for unittests */
+            if(res===undefined) return _b_.None
+            return res
         }
 
-        // fixme: some extra variables are bleeding into locals...
-        /*  This also causes issues for unittests */
-        if(res===undefined) return _b_.None
-        return res
+        $B.tasks.push([update_ns])
+        $B.loop()
     }catch(err){
         if(err.$py_error===undefined){throw $B.exception(err)}
         throw err

@@ -123,7 +123,11 @@ function idb_load(evt, module){
             //$B.builtins.setattr($B.imported[elts.join(".")], last_name, $module)
         }
         //console.log('found in db', module)
-        __BRYTHON__.module_source[module] = res.content
+        if(res.is_package){
+            __BRYTHON__.module_source[module] = [res.content]
+        }else{
+            __BRYTHON__.module_source[module] = res.content
+        }
         if(res.imports.length>0){
             // res.impots is a string with the modules imported by the current
             // modules, separated by commas
@@ -253,7 +257,7 @@ $B.idb_open = function(obj){
 // Function loop() takes the first task in the $B.tasks list and processes it.
 // The function executed in loop() may itself add new $B.tasks and call loop().
 
-function loop(){
+var loop = $B.loop = function(){
     if($B.tasks.length==0){
         // No more $B.tasks to process.
         idb_cx.result.close()
@@ -264,6 +268,10 @@ function loop(){
         args = task.slice(1)
 
     if(func == "execute"){
+        if(task[2]!==undefined){
+            console.log('env for eval', task[2])
+            eval("$locals_"+task[2][0]+"=task[2][1]")
+        }
         try{
             eval(task[1])
         }catch(err){
