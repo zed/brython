@@ -64,7 +64,7 @@ function add_jsmodule(module, source){
     $B.module_source[module] = source
 }
 
-function inImported(module){
+var inImported = $B.inImported = function(module){
     if(__BRYTHON__.imported.hasOwnProperty(module)){
         __BRYTHON__.module_source[module] = "in imported"
     }else if(__BRYTHON__.stdlib.hasOwnProperty(module)){
