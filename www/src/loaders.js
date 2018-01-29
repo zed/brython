@@ -100,6 +100,17 @@ function idb_load(evt, module){
                 is_package = elts.length==3
             if(ext==".py"){
                 // Precompile Python module
+                if(is_package){var __package__ = module}
+                else{
+                    var elts = module.split(".")
+                    elts.pop()
+                    __package__ = elts.join(".")
+                }
+                $B.imported[module] = {
+                    __class__:$B.$ModuleDict,
+                    __name__:name,
+                    __package__:__package__
+                }
                 var root = __BRYTHON__.py2js(source, module, module,
                         "__builtins__"),
                     js = root.to_js(),
@@ -116,12 +127,14 @@ function idb_load(evt, module){
         }
     }else{
         // Precompiled Javascript found in indexedDB database.
+        /*
         var elts = module.split('.')
         if(elts.length>1){
             var last_name = elts.pop()
             console.log('set attr', last_name, 'of imported', elts.join("."))
-            //$B.builtins.setattr($B.imported[elts.join(".")], last_name, $module)
+            $B.builtins.setattr($B.imported[elts.join(".")], last_name, $module)
         }
+        */
         //console.log('found in db', module)
         if(res.is_package){
             __BRYTHON__.module_source[module] = [res.content]

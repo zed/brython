@@ -3011,13 +3011,20 @@ function $FromCtx(context){
             nb_dots++
             _mod=_mod.substr(1)
         }
+        if($B.imported[mod]){
+            console.log("module package", $B.imported[mod].__package__)
+            var parent_module_elts = $B.imported[mod].__package__.split(".")
+        }
         if(nb_dots>0){
-            console.log("import", this.module, 'dots', nb_dots, "parent module", parent_module_elts)
-            packages = parent_module_elts.slice(0, parent_module_elts.length - nb_dots + 1)
+            var nb_elts = parent_module_elts.length - nb_dots + 1
+            console.log("import", this.module, 'dots', nb_dots,
+                "parent module", parent_module_elts, "_mod", _mod, "nb_elts", nb_elts)
+            packages = parent_module_elts.slice(0, nb_elts)
         }
         if(_mod){
             packages.push(_mod)
         }
+        if(nb_dots>0){console.log('packages', packages)}
         /*
             if(_mod.charAt(0)=='.'){
                 console.log("_mod", _mod)
@@ -3047,6 +3054,16 @@ function $FromCtx(context){
 
         this.module = packages.join('.')
         module.imports[this.module] = true
+
+        console.log("module name", this.module, "names", this.names)
+        for(var i=0;i<this.names.length;i++){
+            var subname = this.module + this.names[i]
+            if($B.hasOwnProperty("VFS") &&
+                    !$B.module_source.hasOwnProperty(subname) &&
+                    $B.VFS.hasOwnProperty(subname)){
+                module.imports[subname] = true
+            }
+        }
 
         // FIXME : Replacement still needed ?
         var mod_name = this.module.replace(/\$/g,'')
@@ -3079,6 +3096,8 @@ function $FromCtx(context){
             // 'from X import *' : this will make name resolution harder :-(
             scope.blurred = true
         }
+
+        if(nb_dots>0){console.log(res.join(""))}
 
         return res.join('');
     }
